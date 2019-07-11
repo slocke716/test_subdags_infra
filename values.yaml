@@ -1,0 +1,166 @@
+# Duplicate this file and put your customization here
+
+# Requirements:
+# Airflow with KubernetesExecutor
+
+##
+## common settings and setting for the webserver
+airflow:
+  s3Logging:
+    enabled: true
+    logFolder: sets3logfolder
+  ##
+  ## You will need to define your fernet key:
+  ## Generate fernet_key with:
+  ##    python -c "from cryptography.fernet import Fernet; FERNET_KEY = Fernet.generate_key().decode(); print(FERNET_KEY)"
+  ## fernet_key: ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD
+  fernet_key: "abcdefghijklmnopqrstuvwxyzABCDEFG1234567890="
+  service:
+    type: NodePort
+  ##
+  ## base image for webserver/scheduler/workers
+  ## Note: If you want to use airflow HEAD (2.0dev), use the following image:
+  # image
+  #   repository: stibbons31/docker-airflow-dev
+  #   tag: 2.0dev
+  ## Airflow 2.0 allows changing the value ingress.web.path and ingress.flower.path (see bellow).
+  ## In version < 2.0, changing these paths won't have any effect.
+  image:
+    ##
+    ## docker-airflow image
+    repository: <INSERT-REGISTRY>/k8sexec
+    ##
+    ## image tag
+    tag: latest
+    ##
+    ## Image pull policy
+    ## values: Always or IfNotPresent
+    pull_policy: Always
+  ##
+  ## Custom airflow configuration environment variables
+  ## Use this to override any airflow setting settings defining environment variables in the
+  ## following form: AIRFLOW__<section>__<key>.
+  ## See the Airflow documentation: http://airflow.readthedocs.io/en/latest/configuration.html?highlight=__CORE__#setting-configuration-options)
+  ## Example:
+  ##   config:
+  ##     AIRFLOW__CORE__EXPOSE_CONFIG: "True"
+  ##     HTTP_PROXY: "http://proxy.mycompany.com:123"
+  config: []
+
+  ##
+  ## We can define these locally and then have secrets in upper envs
+  connections:
+    enabled: True
+    secretName: slocke-env
+    connections: []
+
+  logs:
+    persistence:
+      enabled: false
+      accessMode: ReadWriteOnce
+      ##
+      ## Persistent Volume Storage Class
+      ## If defined, storageClassName: <storageClass>
+      ## If set to "-", storageClassName: "", which disables dynamic provisioning
+      ## If undefined (the default) or set to null, no storageClassName spec is
+      ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+      ##   GKE, AWS & OpenStack)
+      # storageClass: default
+      ##
+      ## Existing claim to use
+      existingClaim:
+      existingClaimSubPath:
+      ##
+      ## Persistant storage size request
+      size: 1Gi
+
+  ##
+  ## Configure DAGs deployment and update
+  dags:
+    ##
+    ## Storage configuration for DAGs
+    persistence:
+      ##
+      ## enable persistance storage
+      enabled: false
+      ##
+      ## Volume access mode
+      accessMode: ReadWriteOnce
+      ##
+      ## Persistent Volume Storage Class
+      ## If defined, storageClassName: <storageClass>
+      ## If set to "-", storageClassName: "", which disables dynamic provisioning
+      ## If undefined (the default) or set to null, no storageClassName spec is
+      ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+      ##   GKE, AWS & OpenStack)
+      # storageClass: default
+      ##
+      ## Existing claim to use
+      existingClaim:
+      existingClaimSubPath:
+      ##
+      ## Persistant storage size request
+      size: 1Gi
+      #
+      # The init-dags.sh is run in an init container before the scheduler and
+      # webserver are started. Here you can add logic to initialize the dags
+      # volume. Use a multiline string with bash commands.
+      init_dags:
+    ##
+    ## Configure Git repository to fetch DAGs
+    git:
+      url: https://github.com/slocke716/test_subdags.git
+      branch: master
+      subpath: dags
+      ##
+      ## Number of seconds to wait between git synchronizations
+      wait: 60
+
+##
+## Ingress configuration
+ingress:
+  ##
+  ## enable ingress
+  ## Note: If you want to change url prefix for web ui or flower even if you do not use ingress,
+  ## you can still change ingress.web.path and ingress.flower.path
+  enabled: true
+  ##
+  ## Configure the webserver endpoint
+  web:
+    ## NOTE: This requires an airflow version > 1.9.x
+    ## For the moment (March 2018) this is **not** available on official package, you will have
+    ## to use an image where airflow has been updated to its current HEAD.
+    ## You can use the following one:
+    ##  stibbons31/docker-airflow-dev:2.0dev
+    ##
+    ## if path is '/airflow':
+    ##  - UI will be accessible at 'http://mycompany.com/airflow/admin'
+    ##  - Healthcheck is at 'http://mycompany.com/airflow/health'
+    ##  - api is at 'http://mycompany.com/airflow/api'
+    ## NOTE: do NOT keep trailing slash. For root configuration, set and empty string
+    path: ""
+    ##
+    ## hostname for the webserver
+    host: "localhost"
+    ##
+    ## Annotations for the webserver
+    ## Airflow webserver handles relative path completely, just let your load balancer give the HTTP
+    ## header like the requested URL (no special configuration neeed)
+    annotations:
+      - kubernetes.io/ingress.class: "nginx"
+      - external-dns.alpha.kubernetes.io/alias: "true"
+    tls:
+      ## Set to "true" to enable TLS termination at the ingress
+      enabled: true
+      ## If enabled, set "secretName" to the secret containing the TLS private key and certificate
+      ## Example:
+      ## secretName: example-com-crt
+
+postgresql:
+  enabled: true
+  postgresUser: postgres
+  postgresPassword: airflow
+  postgresDatabase: airflow
+  persistence:
+    enabled: false
+    accessMode: ReadWriteOnce
